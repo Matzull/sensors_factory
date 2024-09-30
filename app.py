@@ -38,7 +38,14 @@ async def update_sensor_values(sensor):
     while True:
         await asyncio.sleep(sensor.frequency)
         sensor.update_value()
-        updated_sensors.append(sensor)
+        await manager.send_update(
+            json.dumps({
+                "sensor_id": sensor.sensor_id,
+                "type": sensor.system_id,
+                "value": sensor.value,
+                "unit": sensor.unit,
+            })
+        )
 
 
 @asynccontextmanager
@@ -110,41 +117,9 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            sensor_data = [
-                {
-                    "sensor_id": sensor.sensor_id,
-                    "type": sensor.system_id,
-                    "value": sensor.value,
-                    "unit": sensor.unit,
-                }
-                for sensor in updated_sensors
-            ]
-            updated_sensors.clear()
-            await manager.send_update(json.dumps(sensor_data))
-            await asyncio.sleep(0.25)
+            await asyncio.sleep(1)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-
-
-@app.websocket("/ws/all_sensors/")
-async def websocket_endpoint_all(websocket: WebSocket):
-    await manager.connect(websocket)
-    try:
-        while True:
-            sensor_data = [
-                {
-                    "sensor_id": sensor.sensor_id,
-                    "type": sensor.system_id,
-                    "value": sensor.value,
-                    "unit": sensor.unit,
-                }
-                for sensor in sensors
-            ]
-            await manager.send_update(json.dumps(sensor_data))
-            await asyncio.sleep(0.25)
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-
 
 manager = WebSocketManager()
 
