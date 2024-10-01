@@ -1,5 +1,6 @@
 import random
 
+
 class Sensor:
     def __init__(
         self,

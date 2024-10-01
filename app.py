@@ -6,6 +6,7 @@ from fastapi.websockets import WebSocketDisconnect
 from sensors.sensor_factory import SensorFactory
 from collections import deque
 
+
 class WebSocketManager:
     def __init__(self):
         self.active_connections = []
@@ -13,7 +14,6 @@ class WebSocketManager:
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-        await websocket.send_text("Connected")
 
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
@@ -40,12 +40,14 @@ async def update_sensor_values(sensor):
         sensor.update_value()
         history[sensor.sensor_id].append(sensor.value)
         await manager.send_update(
-            json.dumps({
-                "sensor_id": sensor.sensor_id,
-                "type": sensor.system_id,
-                "value": sensor.value,
-                "unit": sensor.unit,
-            })
+            json.dumps(
+                {
+                    "sensor_id": sensor.sensor_id,
+                    "type": sensor.system_id,
+                    "value": sensor.value,
+                    "unit": sensor.unit,
+                }
+            )
         )
 
 
@@ -53,7 +55,7 @@ async def update_sensor_values(sensor):
 async def lifespan(app: FastAPI):
     global sensors
     sensor_configs = load_sensors_from_json("sensors_config.json")
-    for config in sensor_configs:
+    for config in sensor_configs[:1]:
         sensor = SensorFactory.create_sensor(
             min_value=config["min_value"],
             max_value=config["max_value"],
@@ -99,6 +101,7 @@ async def list_sensors():
         for sensor in sensors
     ]
 
+
 @app.get("/get_history/")
 async def list_sensors():
     return history
@@ -126,6 +129,7 @@ async def websocket_endpoint(websocket: WebSocket):
             await asyncio.sleep(1)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
 
 manager = WebSocketManager()
 
