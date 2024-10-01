@@ -4,7 +4,7 @@ import asyncio
 from fastapi import FastAPI, WebSocket, HTTPException
 from fastapi.websockets import WebSocketDisconnect
 from sensors.sensor_factory import SensorFactory
-
+from collections import deque
 
 class WebSocketManager:
     def __init__(self):
@@ -38,6 +38,7 @@ async def update_sensor_values(sensor):
     while True:
         await asyncio.sleep(sensor.frequency)
         sensor.update_value()
+        history[sensor.sensor_id].append(sensor.value)
         await manager.send_update(
             json.dumps({
                 "sensor_id": sensor.sensor_id,
@@ -61,6 +62,7 @@ async def lifespan(app: FastAPI):
             frequency=config["frequency"],
         )
         sensors.append(sensor)
+        history[sensor.sensor_id] = deque(maxlen=1000)
         asyncio.create_task(update_sensor_values(sensor))
     yield
 
@@ -97,6 +99,10 @@ async def list_sensors():
         for sensor in sensors
     ]
 
+@app.get("/get_history/")
+async def list_sensors():
+    return history
+
 
 @app.get("/sensor/{sensor_id}")
 async def get_sensor(sensor_id: int):
@@ -123,5 +129,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
 manager = WebSocketManager()
 
+history = {}
 sensors = []
 updated_sensors = []
