@@ -2,7 +2,7 @@ from sensors import power, pressure, temperature, rotation, water_level
 
 
 class SensorFactory:
-    sensor_number = 0
+    sensor_number = -1
 
     @staticmethod
     def get_id():

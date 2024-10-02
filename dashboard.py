@@ -8,42 +8,35 @@ import asyncio
 import json
 import threading
 import plotly.subplots as subplots
+from datetime import datetime
 
-# Initialize the data structure
-X = deque(maxlen=20)
-Y = deque(maxlen=20)
-
-# WebSocket connection URL to your FastAPI
 WS_URL = "ws://localhost:8998/ws/real_time_data"
-
-# Global variable to store the latest sensor data
-last_index = 0
-
-# Function to get data from WebSocket
+SENSOR_NUM = 10
+sensor_data = [
+    (deque(maxlen=100), deque(maxlen=100), deque(maxlen=100)) for _ in range(SENSOR_NUM)
+]
+counter = 0
 
 
 async def fetch_sensor_data():
-    global X, Y, last_index
+    global counter
     async with websockets.connect(WS_URL) as websocket:
         async for message in websocket:
             data = json.loads(message)
-            X.append(last_index)
-            Y.append(data["value"])
-            last_index += 1
+            (sensor_data[int(data["sensor_id"])][0]).append(
+                datetime.fromtimestamp(data["timestamp"]).strftime("%H:%M:%S")
+            )  #
+            (sensor_data[int(data["sensor_id"])][1]).append(data["value"])
+            (sensor_data[int(data["sensor_id"])][2]).append(counter)
+            counter += 1
 
 
-# Function to run the async event loop in a separate thread
 def run_fetch_data():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(fetch_sensor_data())
 
 
-# Start the WebSocket data fetch in a separate thread
-fetch_thread = threading.Thread(target=run_fetch_data, daemon=True)
-fetch_thread.start()
-
-# Initialize the Dash app
 app = dash.Dash(__name__)
 app.layout = html.Div(
     [
@@ -56,22 +49,54 @@ app.layout = html.Div(
     ]
 )
 
+
 @app.callback(Output("live-graph", "figure"), [Input("graph-update", "n_intervals")])
 def update_graph_scatter(n):
-    fig = subplots.make_subplots(rows=1, cols=1, vertical_spacing=0.2)
-    fig.add_trace(
-        go.Scatter(x=list(X), y=list(Y), mode="lines+markers", name="Sensor Data")
-    )
-    y_offset = (max(Y) - min(Y)) * 0.05
-    x_offset = (max(X) - min(X)) * 0.05
+    fig = subplots.make_subplots(rows=5, cols=2)
+    for i, (labels, values, counter) in enumerate(sensor_data):
+        fig.add_trace(
+            go.Scatter(
+                x=list(labels), y=list(values), mode="lines+markers", name=f"Sensor {i}"
+            ),
+            row=(i // 2) + 1,
+            col=(i % 2) + 1,
+        )
+        if len(labels) | len(values) < 2:
+            return {"data": fig.data}
+        min_Y, max_Y = min(values), max(values)
+        min_Z, max_Z = min(counter), max(counter)
+        y_offset = (max_Y - min_Y) * 0.5
+        z_offset = (max_Z - min_Z) * 0.05
+        x_labels = [
+            label if index % 2 == 0 else "" for index, label in enumerate(labels)
+        ]
+        fig.update_xaxes(
+            range=[min_Z - z_offset, max_Z + z_offset],
+            row=(i // 2) + 1,
+            col=(i % 2) + 1,
+        )
+        fig.update_yaxes(
+            range=[min_Y - y_offset, max_Y + y_offset],
+            row=(i // 2) + 1,
+            col=(i % 2) + 1,
+            
+        )
     return {
         "data": fig.data,
         "layout": go.Layout(
-            xaxis=dict(range=[min(X) - x_offset, max(X) + x_offset]),
-            yaxis=dict(range=[min(Y) - y_offset, max(Y) + y_offset]),
+            xaxis=dict(
+                range=[min_Z - z_offset, max_Z + z_offset],
+                tickmode="array",
+                tickvals=list(labels),
+                ticktext=list(x_labels),
+                title="Timestamps",
+            ),
+            yaxis=dict(range=[min_Y - y_offset, max_Y + y_offset], title="Values"),
         ),
     }
 
 
-if __name__ == "__main__":
-    app.run(debug=True)
+fetch_thread = threading.Thread(target=run_fetch_data, daemon=True)
+fetch_thread.start()
+
+app.run(debug=True)
