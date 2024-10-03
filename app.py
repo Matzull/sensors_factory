@@ -7,6 +7,8 @@ from sensors.sensor_factory import SensorFactory
 from collections import deque
 from time import time
 
+SENSORS_TO_EXPOSE = 10
+
 
 class WebSocketManager:
     def __init__(self):
@@ -57,7 +59,7 @@ async def update_sensor_values(sensor):
 async def lifespan(app: FastAPI):
     global sensors
     sensor_configs = load_sensors_from_json("sensors_config.json")
-    for config in sensor_configs[:10]:
+    for config in sensor_configs[:SENSORS_TO_EXPOSE]:
         sensor = SensorFactory.create_sensor(
             min_value=config["min_value"],
             max_value=config["max_value"],
@@ -106,7 +108,7 @@ async def list_sensors():
 
 
 @app.get("/get_history/")
-async def list_sensors():
+async def get_history():
     return history
 
 

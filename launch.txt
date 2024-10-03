@@ -1,0 +1,5 @@
+# Launching the api
+uvicorn app:app --port 8998
+
+# Launching the dashboard
+python dashboard.py
